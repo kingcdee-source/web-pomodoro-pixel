@@ -1,0 +1,704 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chill RPG Pomodoro</title>
+    <!-- Pixel RPG icons: BRIGADA 16x16 icon pack by IvoryRed / OpenGameArt, CC BY 4.0. https://opengameart.org/content/brigada-16x16-icon-pack -->
+    <style>
+        /* === CSS RESET & VARIABLES === */
+        :root {
+            --bg-color: #0b0d17; --panel-bg: rgba(15, 17, 26, 0.7);
+            --panel-border: #444c66; --primary-text: #e0e0e0;
+            --highlight: #f9a875; --hp-color: #eb6b6f;
+            --uncommon: #57b952; --rare: #a464f4; --epic: #ffcc00;
+            --skill-color: #00e5ff;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; }
+        body {
+            background-color: var(--bg-color); color: var(--primary-text);
+            font-family: 'Courier New', Courier, monospace; text-transform: uppercase; font-weight: bold;
+            height: 100vh; overflow: hidden; position: relative;
+        }
+
+        /* === CHILL BACKGROUNDS === */
+        #world { position: absolute; top: 0; left: 0; right: 0; bottom: 0; z-index: -1; transition: background 1.5s ease; }
+        .bg-camp { background: linear-gradient(to bottom, #0a0c16 0%, #17192b 60%, #1f2538 100%); }
+        
+        /* Thematic Dungeon Backgrounds */
+        .bg-dragon { background: linear-gradient(to bottom, #1a0808 0%, #2b0f0f 60%, #0d0404 100%); }
+        .bg-trap { background: linear-gradient(to bottom, #081a10 0%, #0f2b1c 60%, #040d08 100%); }
+        .bg-demon { background: linear-gradient(to bottom, #10081a 0%, #1c0f2b 60%, #08040d 100%); }
+
+        .stars-container { position: absolute; width: 200%; height: 100%; animation: moveStars 120s linear infinite; opacity: 0.8; }
+        #stars { width: 2px; height: 2px; background: transparent; }
+        @keyframes moveStars { 0% { transform: translateX(0); } 100% { transform: translateX(-50%); } }
+
+        /* === TOP BAR === */
+        .top-bar { position: absolute; top: 0; left: 0; width: 100%; padding: 15px 30px; display: flex; justify-content: space-between; z-index: 10; color: #8892b0; font-size: 0.9rem; text-shadow: 1px 1px 0 #000; }
+
+        /* === COMPACT RPG HUD === */
+        .hud-panel {
+            position: absolute; top: 50px; left: 20px; width: 280px; 
+            background: var(--panel-bg); border: 2px solid var(--panel-border); border-radius: 8px;
+            box-shadow: 0 10px 20px rgba(0,0,0,0.5); padding: 15px; backdrop-filter: blur(4px);
+            z-index: 20; display: flex; flex-direction: column; gap: 10px;
+            transition: opacity 0.3s;
+        }
+        .hidden { display: none !important; }
+
+        .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; font-size: 0.75rem; background: rgba(0,0,0,0.4); padding: 10px; border-radius: 4px; border: 1px solid #333; }
+        .stat-item { display: flex; justify-content: space-between; }
+        .stat-highlight { color: var(--epic); }
+        .stat-atk { color: var(--skill-color); grid-column: span 2; text-align: center; margin-top: 5px; font-size: 0.9rem; border-top: 1px dashed #444; padding-top: 5px; }
+
+        .hud-character { display: flex; align-items: center; justify-content: space-between; background: rgba(0,0,0,0.3); padding: 10px; border-radius: 4px; border: 1px solid #333; }
+        .avatar-display {
+            width: 62px; height: 62px; display: flex; align-items: center; justify-content: center;
+            filter: drop-shadow(0 4px 4px rgba(0,0,0,0.8)); margin-right: 15px;
+        }
+        .pixel-icon {
+            --scale: 1;
+            width: calc(16px * var(--scale)); height: calc(16px * var(--scale));
+            display: inline-block; vertical-align: middle; pointer-events: none;
+            background-image: var(--pixel-sheet);
+            background-repeat: no-repeat;
+            background-size: calc(176px * var(--scale)) calc(272px * var(--scale));
+            background-position: calc(var(--x) * -16px * var(--scale)) calc(var(--y) * -16px * var(--scale));
+            image-rendering: pixelated; image-rendering: crisp-edges;
+            filter: drop-shadow(0 2px 0 rgba(0,0,0,0.8));
+        }
+        .avatar-display .pixel-icon { --scale: 3.5; }
+        .character-icon {
+            width: 1em; height: 1em; display: inline-block; object-fit: contain; object-position: center bottom;
+            image-rendering: pixelated; image-rendering: crisp-edges; pointer-events: none;
+            filter: drop-shadow(0 3px 0 rgba(0,0,0,0.85));
+        }
+        .avatar-display .character-icon { width: 64px; height: 64px; }
+        #combat-avatar .character-icon { width: 66px; height: 66px; }
+        .class-button .character-icon { width: 58px; height: 58px; margin-bottom: 4px; }
+        .inv-item .pixel-icon, .equip-slot .pixel-icon { --scale: 1.8; }
+        #combat-avatar .pixel-icon, #mob-avatar .pixel-icon { --scale: 3.6; }
+        .mini-weapon .pixel-icon, .mini-skill .pixel-icon { --scale: 1.8; }
+        .class-button { min-width: 120px; display: flex; flex-direction: column; align-items: center; gap: 2px; }
+        .class-button .pixel-icon { --scale: 2.8; margin-bottom: 4px; }
+        .class-button small { color: #8892b0; font-size: 0.7rem; }
+        .chest .pixel-icon { --scale: 5; }
+        #gacha-icon .pixel-icon { --scale: 4.6; }        
+        .equip-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; width: 100%; }
+        .equip-slot {
+            width: 45px; height: 45px; border: 1px dashed #666; background: rgba(0,0,0,0.5); border-radius: 4px;
+            display: flex; justify-content: center; align-items: center; font-size: 1.2rem; position: relative;
+        }
+        .equip-slot::after { content: attr(data-label); position: absolute; bottom: 1px; right: 2px; font-size: 0.45rem; color: #777; }
+        .equip-slot.drag-over { border-color: var(--highlight); background: rgba(249, 168, 117, 0.2); }
+
+        .inventory-box { background: rgba(0,0,0,0.4); padding: 10px; border-radius: 4px; border: 1px solid #333; height: 160px; overflow-y: auto; display: flex; flex-wrap: wrap; gap: 4px; align-content: flex-start; }
+        .inv-item {
+            width: 40px; height: 40px; border: 1px solid #555; background: #111; border-radius: 4px;
+            display: flex; justify-content: center; align-items: center; font-size: 1.2rem; cursor: grab; position: relative;
+        }
+        .inv-item:active { cursor: grabbing; }
+
+        .tooltip {
+            position: absolute; top: 0; left: 110%; background: rgba(5,7,15,0.95); border: 1px solid var(--highlight); padding: 8px; font-size: 0.7rem; border-radius: 4px;
+            color: #fff; width: max-content; max-width: 150px; display: none; z-index: 100; pointer-events: none; white-space: pre-wrap; line-height: 1.4;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.8);
+        }
+        .inv-item:hover .tooltip, .equip-slot:hover .tooltip { display: block; }
+
+        /* === CENTER STAGE === */
+        .center-stage { position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 5; pointer-events: none; }
+        
+        .dungeon-info { font-size: 1.2rem; color: var(--highlight); letter-spacing: 3px; margin-bottom: -10px; text-shadow: 2px 2px 0 #000; animation: float 3s infinite ease-in-out; }
+        
+        .timer-display { font-size: 7rem; color: #fff; text-shadow: 0 0 30px rgba(249, 168, 117, 0.3), 3px 3px 0px #000; letter-spacing: 6px; font-weight: normal; margin-bottom: 20px; pointer-events: auto; }
+        
+        .start-buttons { display: flex; gap: 15px; margin-top: 10px; pointer-events: auto; }
+        button {
+            background: rgba(0,0,0,0.6); color: #fff; font-family: inherit; font-weight: bold; padding: 12px 20px; border: 1px solid var(--panel-border); border-radius: 4px; cursor: pointer; transition: 0.2s; backdrop-filter: blur(2px); font-size: 1rem;
+        }
+        button:hover { background: rgba(249, 168, 117, 0.1); border-color: var(--highlight); color: var(--highlight); }
+        button:active { transform: scale(0.95); }
+        
+        /* Fixed Skip Button */
+        .skip-btn { border-color: #eb6b6f; color: #eb6b6f; font-size: 0.8rem; padding: 8px 15px; opacity: 0.6; margin-top: 20px; pointer-events: auto; }
+        .skip-btn:hover { background: rgba(235, 107, 111, 0.1); color: #eb6b6f; opacity: 1; }
+
+        /* === CAMPFIRE === */
+        .campfire { position: relative; width: 120px; height: 120px; margin-top: 20px; pointer-events: auto; }
+        .logs { position: absolute; bottom: 0; left: 20px; width: 80px; height: 30px; }
+        .log { position: absolute; width: 60px; height: 14px; background: #3e2723; border: 2px solid #1f1209; border-radius: 3px; box-shadow: inset -2px -2px 0 rgba(0,0,0,0.5); }
+        .log-1 { transform: rotate(25deg); left: 0; bottom: 5px; }
+        .log-2 { transform: rotate(-25deg); right: 0; bottom: 5px; }
+        
+        .glow { position: absolute; bottom: -30px; left: -40px; width: 200px; height: 200px; background: radial-gradient(circle, rgba(249,168,117,0.15) 0%, transparent 60%); border-radius: 50%; animation: pulse-glow 2s infinite alternate; }
+        
+        .flames { position: absolute; bottom: 15px; left: 35px; width: 50px; height: 60px; }
+        .flame { position: absolute; bottom: 0; background: var(--highlight); border-radius: 50% 50% 20% 20%; transform-origin: bottom center; box-shadow: 0 0 10px var(--highlight); }
+        .flame-1 { width: 35px; height: 50px; left: 7px; animation: burn 0.5s infinite alternate ease-in-out; }
+        .flame-2 { width: 20px; height: 35px; left: -5px; background: #ffcc00; animation: burn 0.4s infinite alternate-reverse ease-in-out; }
+        .flame-3 { width: 20px; height: 40px; right: -5px; background: #eb6b6f; animation: burn 0.6s infinite alternate ease-in-out; }
+        
+        @keyframes burn { 0% { transform: scaleY(1) skewX(-2deg); } 100% { transform: scaleY(1.15) skewX(2deg); } }
+        @keyframes pulse-glow { 0% { opacity: 0.8; transform: scale(0.95); } 100% { opacity: 1; transform: scale(1.05); } }
+
+        .campfire.extinguished .flames, .campfire.extinguished .glow { display: none; }
+        .campfire.extinguished .log { background: #1a1a1a; border-color: #000; box-shadow: none; }
+
+        /* === MINI COMBAT ZONE === */
+        .combat-zone { position: absolute; bottom: 0; left: 0; width: 100%; height: 100px; display: flex; justify-content: center; align-items: flex-end; padding-bottom: 20px; background: linear-gradient(to top, rgba(0,0,0,0.8) 0%, transparent 100%); z-index: 6; opacity: 0; transition: opacity 0.5s; pointer-events: none; }
+        .combat-zone.active { opacity: 1; }
+        
+        .mini-entity { text-align: center; font-size: 2.5rem; position: relative; margin: 0 50px; filter: drop-shadow(0 5px 2px rgba(0,0,0,0.8)); }
+        .mini-weapon { font-size: 1.2rem; position: absolute; right: -15px; top: 10px; }
+        .mini-skill { font-size: 1.2rem; position: absolute; left: -15px; top: 0px; animation: float 2s infinite ease-in-out; }
+        
+        .hp-bar-mini { width: 50px; height: 6px; background: #000; border: 1px solid #444; margin: 0 auto 5px; border-radius: 2px;}
+        .hp-fill-mini { height: 100%; background: var(--hp-color); transition: width 0.2s; }
+
+        .attacking { animation: attackAnim 0.3s ease; }
+        .hit { animation: hitAnim 0.2s; filter: brightness(0) invert(1); }
+        .crit-text { position: absolute; top: -30px; color: #ff0; font-size: 1rem; font-weight: bold; animation: floatUp 0.5s forwards; pointer-events: none; text-shadow: 1px 1px 0 #000;}
+        .floor-up-text { position: absolute; bottom: 120px; color: var(--highlight); font-size: 2rem; font-weight: bold; text-shadow: 2px 2px 0 #000; animation: floatUpSlow 2s forwards; pointer-events: none;}
+        
+        @keyframes attackAnim { 0%, 100% { transform: translateX(0); } 50% { transform: translateX(25px) rotate(15deg); } }
+        @keyframes hitAnim { 0%, 100% { transform: translateX(0); } 50% { transform: translateX(5px); } }
+        @keyframes float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-5px); } }
+        @keyframes floatUp { 0% { opacity: 1; transform: translateY(0) scale(1); } 100% { opacity: 0; transform: translateY(-20px) scale(1.2); } }
+        @keyframes floatUpSlow { 0% { opacity: 0; transform: translateY(20px); } 20% { opacity: 1; transform: translateY(0); } 80% { opacity: 1; transform: translateY(-10px); } 100% { opacity: 0; transform: translateY(-30px); } }
+
+        /* === MODALS === */
+        .overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(5, 6, 10, 0.95); display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 100; opacity: 0; pointer-events: none; transition: 0.3s; }
+        .overlay.active { opacity: 1; pointer-events: auto; }
+        
+        .modal-panel { background: rgba(15, 17, 26, 0.95); border: 2px solid var(--panel-border); border-radius: 8px; box-shadow: 0 10px 40px rgba(0,0,0,0.8); padding: 30px; width: 90%; max-width: 400px; text-align: center; }
+        .chest { font-size: 5rem; cursor: pointer; animation: pulse 1s infinite alternate; filter: drop-shadow(0 0 20px rgba(249,168,117,0.4)); margin-bottom: 10px; }
+        @keyframes pulse { from {transform: scale(1);} to {transform: scale(1.05);} }
+
+    </style>
+</head>
+<body class="bg-camp">
+
+    <div id="world" class="bg-camp">
+        <div class="stars-container"><div id="stars"></div></div>
+    </div>
+
+    <div class="top-bar">
+        <span id="header-status">STATUS: RESTING AT CAMP</span>
+        <span id="header-kills">TOTAL KILLS: 0</span>
+    </div>
+
+    <div class="center-stage">
+        <div id="dungeon-info" class="dungeon-info hidden">FLOOR 1: DUNGEON</div>
+        <div id="study-timer" class="timer-display hidden">00:00</div>
+        
+        <div id="camp-actions" class="start-buttons hidden">
+            <button onclick="startCombat(25)">25 MIN</button>
+            <button onclick="startCombat(45)">45 MIN</button>
+            <button onclick="startCombat(60)">60 MIN</button>
+        </div>
+
+        <button id="skip-btn" class="skip-btn hidden" onclick="skipCombat()">SKIP (NO REWARD)</button>
+
+        <div id="center-campfire" class="campfire burning">
+            <div class="glow"></div>
+            <div class="flames"><div class="flame flame-1"></div><div class="flame flame-2"></div><div class="flame flame-3"></div></div>
+            <div class="logs"><div class="log log-1"></div><div class="log log-2"></div></div>
+        </div>
+    </div>
+
+    <div id="hud-panel" class="hud-panel hidden">
+        <div style="color: var(--highlight); font-size: 0.8rem; margin-bottom: 5px;">CHARACTER & GEAR</div>
+        
+        <div class="hud-character">
+            <div class="avatar-display" id="hud-avatar"></div>
+            <div class="equip-grid">
+                <div class="equip-slot" data-slot="weapon" data-label="WEP" ondragover="allowDrop(event)" ondragleave="dragLeave(event)" ondrop="dropToEquip(event, 'weapon')"></div>
+                <div class="equip-slot" data-slot="armor" data-label="ARM" ondragover="allowDrop(event)" ondragleave="dragLeave(event)" ondrop="dropToEquip(event, 'armor')"></div>
+                <div class="equip-slot" data-slot="accessory" data-label="ACC" ondragover="allowDrop(event)" ondragleave="dragLeave(event)" ondrop="dropToEquip(event, 'accessory')"></div>
+                <div class="equip-slot" data-slot="skill" data-label="SKILL" ondragover="allowDrop(event)" ondragleave="dragLeave(event)" ondrop="dropToEquip(event, 'skill')" style="border-color: var(--skill-color);"></div>
+            </div>
+        </div>
+
+        <div class="stats-grid">
+            <div class="stat-item"><span>HP:</span> <span id="s-hp">100</span></div>
+            <div class="stat-item"><span>STR:</span> <span id="s-str">0</span></div>
+            <div class="stat-item"><span>INT:</span> <span id="s-int">0</span></div>
+            <div class="stat-item"><span>AGI:</span> <span id="s-agi">0</span></div>
+            <div class="stat-item stat-highlight"><span>LUK:</span> <span id="s-luk">0</span></div>
+            <div class="stat-item"><span style="color:#666">CLS:</span> <span id="s-class">NONE</span></div>
+            <div class="stat-atk">TOTAL ATK: <span id="s-atk">0</span></div>
+        </div>
+
+        <div style="font-size: 0.7rem; color: #8892b0; margin-top: 5px;">INVENTORY (DRAG TO EQUIP)</div>
+        <div class="inventory-box" id="inventory-list" ondragover="allowDrop(event)" ondragleave="dragLeave(event)" ondrop="dropToInventory(event)"></div>
+    </div>
+
+    <div class="combat-zone" id="combat-stage">
+        <div class="mini-entity">
+            <div id="combat-skill-icon" class="mini-skill hidden"></div>
+            <div id="combat-avatar"></div>
+            <div id="combat-weapon" class="mini-weapon hidden"></div>
+        </div>
+        <div class="mini-entity">
+            <div class="hp-bar-mini"><div class="hp-fill-mini" id="mob-hp-fill"></div></div>
+            <div id="mob-avatar"></div>
+        </div>
+    </div>
+
+    <div class="overlay active" id="class-modal">
+        <div class="modal-panel" style="max-width: 500px;">
+            <h2 style="color: var(--highlight); margin-bottom: 25px;">CHOOSE YOUR PATH</h2>
+            <div style="display: flex; justify-content: center; gap: 15px;">
+                <button class="class-button" onclick="selectClass('WARRIOR', 'warrior', 'melee', 10, 2, 4, 5)"><img class="character-icon" src="assets/icons/warrior.png" alt="Warrior" draggable="false">WARRIOR<br><small>Melee</small></button>
+                <button class="class-button" onclick="selectClass('MAGE', 'mage', 'magic', 2, 10, 3, 5)"><img class="character-icon" src="assets/icons/mage.png" alt="Mage" draggable="false">MAGE<br><small>Magic</small></button>
+                <button class="class-button" onclick="selectClass('ROGUE', 'rogue', 'agile', 4, 3, 10, 12)"><img class="character-icon" src="assets/icons/assassin.png" alt="Rogue" draggable="false">ROGUE<br><small>High LUK</small></button>
+            </div>
+        </div>
+    </div>
+
+    <div class="overlay" id="report-modal">
+        <div class="modal-panel">
+            <h2 style="color: var(--highlight); margin-bottom: 15px;">SESSION COMPLETE</h2>
+            <div id="report-log" style="text-align: left; font-size: 0.9rem; margin-bottom: 20px; line-height: 1.6; color: #ccc;"></div>
+            <button id="btn-claim-loot" onclick="openGacha()" style="width: 100%; border-color: var(--epic); color: var(--epic);">OPEN CHEST 🎁</button>
+            <button id="btn-return-empty" class="hidden" onclick="returnToCamp()" style="width: 100%;">RETURN TO CAMP</button>
+        </div>
+    </div>
+
+    <div class="overlay" id="gacha-modal">
+        <div style="text-align: center;">
+            <div class="chest" id="chest-icon" onclick="revealLoot()"><span class="pixel-icon" style="--x:4; --y:8;" role="img" aria-label="Treasure chest"></span></div>
+            <div style="font-size: 0.8rem; color: #8892b0; margin-top: 10px;" id="chest-hint">Click to open</div>
+            <div id="gacha-reveal" class="modal-panel hidden" style="margin-top: 20px; padding: 20px;">
+                <div id="gacha-icon" style="font-size: 4rem; margin-bottom: 10px;"></div>
+                <div id="gacha-name" style="font-size: 1.2rem; margin-bottom: 5px; font-weight: bold;">Item</div>
+                <div id="gacha-stats" style="font-size: 0.8rem; margin-bottom: 20px; color: #aaa;">Stats</div>
+                <button onclick="returnToCamp()" style="border-color: var(--highlight); width: 100%;">ACCEPT ITEM</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function generateStars() {
+            let boxShadow = "";
+            for (let i = 0; i < 150; i++) {
+                let x = Math.floor(Math.random() * window.innerWidth * 2);
+                let y = Math.floor(Math.random() * window.innerHeight);
+                let color = Math.random() > 0.8 ? '#f9a875' : '#ffffff';
+                boxShadow += `${x}px ${y}px ${color}${i < 149 ? ',' : ''}`;
+            }
+            document.getElementById('stars').style.boxShadow = boxShadow;
+        }
+        generateStars();
+
+        const PIXEL_SHEET = 'https://opengameart.org/sites/default/files/all_the_icons_.png';
+        document.documentElement.style.setProperty('--pixel-sheet', `url("${PIXEL_SHEET}")`);
+
+        const ICONS = {
+            warrior: { src: 'assets/icons/warrior.png', alt: 'Warrior', character: true },
+            mage: { src: 'assets/icons/mage.png', alt: 'Mage', character: true },
+            rogue: { src: 'assets/icons/assassin.png', alt: 'Rogue', character: true },
+            ironSword: { x: 0, y: 0, alt: 'Iron sword' },
+            heavyAxe: { x: 0, y: 2, alt: 'Heavy axe' },
+            oakStaff: { x: 3, y: 11, alt: 'Oak staff' },
+            poisonDagger: { x: 0, y: 3, alt: 'Poison dagger' },
+            leatherVest: { x: 5, y: 15, alt: 'Leather vest' },
+            knightArmor: { x: 1, y: 15, alt: 'Knight armor' },
+            ringOfLuck: { x: 0, y: 4, alt: 'Ring of luck' },
+            mageAmulet: { x: 5, y: 4, alt: 'Amulet of mage' },
+            critTome: { x: 4, y: 3, alt: 'Tome of crit' },
+            swiftTome: { x: 5, y: 3, alt: 'Tome of swift' },
+            lizard: { x: 8, y: 14, alt: 'Lizard monster' },
+            dinosaur: { x: 9, y: 14, alt: 'Dinosaur monster' },
+            dragon: { x: 10, y: 14, alt: 'Dragon' },
+            slime: { x: 10, y: 7, alt: 'Slime' },
+            eye: { x: 10, y: 12, alt: 'Watcher' },
+            golem: { x: 7, y: 15, alt: 'Rock golem' },
+            bat: { x: 8, y: 15, alt: 'Bat' },
+            vampire: { x: 9, y: 15, alt: 'Vampire' },
+            demon: { x: 10, y: 15, alt: 'Demon' },
+            spark: { x: 4, y: 12, alt: 'Skill active' }
+        };
+
+        function escapeHtml(value) {
+            return String(value).replace(/[&<>"']/g, ch => ({'&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;'}[ch]));
+        }
+
+        function escapeAttr(value) { return escapeHtml(value); }
+        function resolveIcon(icon) { return typeof icon === 'string' && ICONS[icon] ? ICONS[icon] : icon; }
+
+        function renderIcon(icon, fallbackAlt = 'icon', className = 'pixel-icon') {
+            const resolved = resolveIcon(icon);
+            if (resolved && typeof resolved === 'object' && resolved.src) {
+                const imgClass = resolved.character ? 'character-icon' : className;
+                return `<img class="${escapeAttr(imgClass)}" src="${escapeAttr(resolved.src)}" alt="${escapeAttr(resolved.alt || fallbackAlt)}" draggable="false">`;
+            }
+            if (resolved && typeof resolved === 'object' && Number.isFinite(resolved.x) && Number.isFinite(resolved.y)) {
+                return `<span class="${escapeAttr(className)}" style="--x:${resolved.x}; --y:${resolved.y};" role="img" aria-label="${escapeAttr(resolved.alt || fallbackAlt)}"></span>`;
+            }
+            return escapeHtml(resolved || '');
+        }
+
+        function setIcon(element, icon, fallbackAlt = 'icon', className = 'pixel-icon') {
+            element.innerHTML = renderIcon(icon, fallbackAlt, className);
+        }
+        // --- DATABASE WITH RARITY ---
+        const itemDatabase = [
+            { id: 1, type: 'weapon', affinity: 'melee', name: 'Iron Sword', icon: ICONS.ironSword, stats: {str: 10}, color: '#fff', rarity: 'Common' },
+            { id: 2, type: 'weapon', affinity: 'melee', name: 'Heavy Axe', icon: ICONS.heavyAxe, stats: {str: 18, luk: -2}, color: 'var(--uncommon)', rarity: 'Uncommon' },
+            { id: 3, type: 'weapon', affinity: 'magic', name: 'Oak Staff', icon: ICONS.oakStaff, stats: {int: 12}, color: '#fff', rarity: 'Common' },
+            { id: 4, type: 'weapon', affinity: 'agile', name: 'Poison Dagger', icon: ICONS.poisonDagger, stats: {agi: 15, luk: 5}, color: 'var(--rare)', rarity: 'Rare' },
+            { id: 5, type: 'armor', name: 'Leather Vest', icon: ICONS.leatherVest, stats: {hp: 50}, color: '#fff', rarity: 'Common' },
+            { id: 6, type: 'armor', name: 'Knight Armor', icon: ICONS.knightArmor, stats: {hp: 120, str: 2}, color: 'var(--uncommon)', rarity: 'Uncommon' },
+            { id: 7, type: 'accessory', name: 'Ring of Luck', icon: ICONS.ringOfLuck, stats: {luk: 15}, color: 'var(--rare)', rarity: 'Rare' },
+            { id: 8, type: 'accessory', name: 'Amulet of Mage', icon: ICONS.mageAmulet, stats: {int: 10}, color: 'var(--epic)', rarity: 'Epic' },
+            { id: 9, type: 'skill', name: 'Tome of Crit', icon: ICONS.critTome, skillCode: 'CRIT', desc: "20% chance x2 DMG", color: 'var(--skill-color)', rarity: 'Epic' },
+            { id: 10, type: 'skill', name: 'Tome of Swift', icon: ICONS.swiftTome, skillCode: 'SWIFT', desc: "Attack faster", color: 'var(--skill-color)', rarity: 'Epic' }
+        ];
+
+        // --- THEMATIC DUNGEONS ---
+        const dungeonThemes = {
+            25: { name: "DRAGON'S PEAK", mobs: [{icon: ICONS.lizard, hp:50}, {icon: ICONS.dinosaur, hp:120}, {icon: ICONS.dragon, hp:300}], bgClass: "bg-dragon" },
+            45: { name: "TRAP LABYRINTH", mobs: [{icon: ICONS.slime, hp:60}, {icon: ICONS.eye, hp:150}, {icon: ICONS.golem, hp:350}], bgClass: "bg-trap" },
+            60: { name: "DEMON ABYSS", mobs: [{icon: ICONS.bat, hp:80}, {icon: ICONS.vampire, hp:200}, {icon: ICONS.demon, hp:500}], bgClass: "bg-demon" }
+        };
+
+        let state = {
+            class: null, avatar: null, affinity: null,
+            baseStats: { hp: 100, str: 0, int: 0, agi: 0, luk: 0 },
+            inventory: [], equipment: { weapon: null, armor: null, accessory: null, skill: null },
+            timerId: null, timeLeft: 0, workMinutes: 0, kills: 0, sessionKills: 0,
+            currentMob: null, combatTickCounter: 0, currentFloor: 1, currentDungeon: null
+        };
+
+        function generateUID() { return Math.random().toString(36).substr(2, 9); }
+        function grantItem(itemObj) { state.inventory.push({ uid: generateUID(), item: itemObj }); }
+
+        function formatTooltip(item) {
+            let txt = `<b style="color:${item.color}">${item.name}</b>\n`;
+            if(item.type === 'weapon') txt += `Type: ${item.affinity}\n`;
+            if(item.type === 'skill') txt += `Skill: ${item.desc}\n`;
+            if(item.stats) {
+                for(let [k,v] of Object.entries(item.stats)) { txt += `${v > 0 ? '+' : ''}${v} ${k.toUpperCase()}\n`; }
+            }
+            return txt;
+        }
+
+        function selectClass(name, avatarKey, affinity, str, int, agi, luk) {
+            const avatar = resolveIcon(avatarKey);
+            state.class = name; state.avatar = avatar; state.affinity = affinity;
+            state.baseStats = { hp: 100, str, int, agi, luk };
+            
+            document.getElementById('class-modal').classList.remove('active');
+            document.getElementById('hud-panel').classList.remove('hidden');
+            document.getElementById('camp-actions').classList.remove('hidden');
+            
+            setIcon(document.getElementById('hud-avatar'), avatar, name);
+            setIcon(document.getElementById('combat-avatar'), avatar, name);
+            
+            grantItem(itemDatabase.find(i => i.type === 'weapon' && i.affinity === affinity));
+            updateStatsUI(); renderInventory();
+        }
+
+        // --- DRAG & DROP ---
+        function renderInventory() {
+            const list = document.getElementById('inventory-list'); list.innerHTML = '';
+            state.inventory.forEach(invItem => {
+                let div = document.createElement('div');
+                div.className = 'inv-item'; div.draggable = true; div.id = `item-${invItem.uid}`;
+                div.innerHTML = `${renderIcon(invItem.item.icon, invItem.item.name)}<div class="tooltip">${formatTooltip(invItem.item)}</div>`;
+                div.style.borderColor = invItem.item.color;
+                div.ondragstart = (e) => { e.dataTransfer.setData('text/plain', invItem.uid); e.dataTransfer.setData('source', 'inventory'); };
+                list.appendChild(div);
+            });
+            renderEquipmentSlots();
+        }
+
+        function renderEquipmentSlots() {
+            ['weapon', 'armor', 'accessory', 'skill'].forEach(slotType => {
+                let slotDiv = document.querySelector(`.equip-slot[data-slot="${slotType}"]`);
+                let eq = state.equipment[slotType];
+                if (eq) {
+                    slotDiv.innerHTML = `${renderIcon(eq.item.icon, eq.item.name)}<div class="tooltip">${formatTooltip(eq.item)}</div>`;
+                    slotDiv.style.borderColor = eq.item.color; slotDiv.draggable = true;
+                    slotDiv.ondragstart = (e) => { e.dataTransfer.setData('text/plain', eq.uid); e.dataTransfer.setData('source', 'slot'); e.dataTransfer.setData('slotType', slotType); };
+                } else {
+                    slotDiv.innerHTML = ''; slotDiv.draggable = false;
+                    slotDiv.style.borderColor = slotType === 'skill' ? 'var(--skill-color)' : '#666';
+                }
+            });
+        }
+
+        function allowDrop(e) { e.preventDefault(); e.currentTarget.classList.add('drag-over'); }
+        function dragLeave(e) { e.currentTarget.classList.remove('drag-over'); }
+
+        function dropToEquip(e, targetSlotType) {
+            e.preventDefault(); e.currentTarget.classList.remove('drag-over');
+            let uid = e.dataTransfer.getData('text/plain'); let source = e.dataTransfer.getData('source');
+            if (source === 'inventory') {
+                let invIdx = state.inventory.findIndex(i => i.uid === uid); let invData = state.inventory[invIdx];
+                if (invData.item.type !== targetSlotType) return; 
+                let oldEq = state.equipment[targetSlotType];
+                state.equipment[targetSlotType] = invData; state.inventory.splice(invIdx, 1); 
+                if (oldEq) state.inventory.push(oldEq); 
+            } 
+            updateStatsUI(); renderInventory();
+        }
+
+        function dropToInventory(e) {
+            e.preventDefault(); e.currentTarget.classList.remove('drag-over');
+            let uid = e.dataTransfer.getData('text/plain'); let source = e.dataTransfer.getData('source');
+            if (source === 'slot') {
+                let slotType = e.dataTransfer.getData('slotType'); let eqData = state.equipment[slotType];
+                state.inventory.push(eqData); state.equipment[slotType] = null;
+            }
+            updateStatsUI(); renderInventory();
+        }
+
+        // --- STATS ---
+        function calculateTotalStats() {
+            let total = { hp: state.baseStats.hp, str: state.baseStats.str, int: state.baseStats.int, agi: state.baseStats.agi, luk: state.baseStats.luk };
+            let weaponPenalty = false;
+
+            Object.values(state.equipment).forEach(eq => {
+                if(eq && eq.item.stats) { for(let [k,v] of Object.entries(eq.item.stats)) total[k] += v; }
+            });
+
+            let atk = 0;
+            if (state.class === 'WARRIOR') atk = total.str * 2;
+            else if (state.class === 'MAGE') atk = total.int * 2;
+            else if (state.class === 'ROGUE') atk = total.agi * 2;
+
+            if (state.equipment.weapon && state.equipment.weapon.item.affinity !== state.affinity) {
+                weaponPenalty = true; atk = Math.floor(atk * 0.5);
+            }
+            return { total, atk, weaponPenalty };
+        }
+
+        function updateStatsUI() {
+            const stats = calculateTotalStats();
+            document.getElementById('s-class').innerText = state.class;
+            document.getElementById('s-hp').innerText = stats.total.hp;
+            document.getElementById('s-str').innerText = stats.total.str;
+            document.getElementById('s-int').innerText = stats.total.int;
+            document.getElementById('s-agi').innerText = stats.total.agi;
+            document.getElementById('s-luk').innerText = stats.total.luk;
+            document.getElementById('s-atk').innerText = stats.atk + (stats.weaponPenalty ? " (Penalty!)" : "");
+            
+            let wpnEq = document.getElementById('combat-weapon');
+            if(state.equipment.weapon) { setIcon(wpnEq, state.equipment.weapon.item.icon, state.equipment.weapon.item.name); wpnEq.classList.remove('hidden'); } else { wpnEq.classList.add('hidden'); }
+            
+            let skillEq = document.getElementById('combat-skill-icon');
+            if(state.equipment.skill) { setIcon(skillEq, ICONS.spark, 'Skill active'); skillEq.classList.remove('hidden'); } else { skillEq.classList.add('hidden'); }
+        }
+
+        // --- POMODORO & COMBAT ---
+        function startCombat(mins) {
+            state.workMinutes = mins; state.timeLeft = mins * 60; 
+            state.sessionKills = 0; state.combatTickCounter = 0;
+            state.currentFloor = 1; state.currentDungeon = dungeonThemes[mins];
+            
+            document.getElementById('camp-actions').classList.add('hidden');
+            document.getElementById('hud-panel').classList.add('hidden'); 
+            document.getElementById('study-timer').classList.remove('hidden');
+            document.getElementById('skip-btn').classList.remove('hidden');
+            document.getElementById('combat-stage').classList.add('active');
+            
+            let infoUI = document.getElementById('dungeon-info');
+            infoUI.innerText = `FLOOR ${state.currentFloor}: ${state.currentDungeon.name}`;
+            infoUI.classList.remove('hidden');
+            
+            document.getElementById('center-campfire').classList.remove('burning');
+            document.getElementById('center-campfire').classList.add('extinguished');
+            
+            document.getElementById('header-status').innerText = "STATUS: EXPLORING DUNGEON";
+            document.getElementById('world').className = state.currentDungeon.bgClass; 
+            document.body.className = state.currentDungeon.bgClass;
+            
+            spawnMob(); updateTimerDisplay();
+            state.timerId = setInterval(combatTick, 1000);
+        }
+
+        function spawnMob() {
+            // Floor affects which mob spawns (0=weak, 1=medium, 2=boss)
+            let mobIndex = Math.min(state.currentFloor - 1, state.currentDungeon.mobs.length - 1);
+            let template = state.currentDungeon.mobs[mobIndex];
+            
+            let hpScale = 1 + (state.kills * 0.02);
+            state.currentMob = { ...template, hp: Math.floor(template.hp * hpScale), currentHp: Math.floor(template.hp * hpScale) };
+            setIcon(document.getElementById('mob-avatar'), state.currentMob.icon, 'Monster');
+            updateMobHP();
+        }
+
+        function updateMobHP() {
+            let pct = (state.currentMob.currentHp / state.currentMob.hp) * 100;
+            document.getElementById('mob-hp-fill').style.width = `${Math.max(0, pct)}%`;
+        }
+
+        function updateTimerDisplay() {
+            let m = Math.floor(state.timeLeft / 60).toString().padStart(2, '0');
+            let s = (state.timeLeft % 60).toString().padStart(2, '0');
+            document.getElementById('study-timer').innerText = `${m}:${s}`;
+            document.title = `${m}:${s} - Chill Pomodoro`;
+        }
+
+        function showFloorUp() {
+            let el = document.createElement('div'); el.className = 'floor-up-text'; 
+            el.innerText = `FLOOR ${state.currentFloor} REACHED!`;
+            document.getElementById('combat-stage').appendChild(el); 
+            setTimeout(() => el.remove(), 2000);
+            document.getElementById('dungeon-info').innerText = `FLOOR ${state.currentFloor}: ${state.currentDungeon.name}`;
+        }
+
+        function createDamageText(text, isCrit) {
+            let el = document.createElement('div'); el.className = 'crit-text'; el.innerText = text;
+            if(isCrit) { el.style.color = '#ff0'; el.style.fontSize = '1.2rem'; }
+            else { el.style.color = '#fff'; el.style.fontSize = '0.8rem'; }
+            let mob = document.getElementById('mob-avatar').parentNode;
+            mob.appendChild(el); setTimeout(() => el.remove(), 500);
+        }
+
+        function combatTick() {
+            if (state.timeLeft <= 0) return endCombat();
+            state.timeLeft--; updateTimerDisplay(); state.combatTickCounter++;
+            
+            // Progression: Floor up every 10 mins (600s)
+            let timeElapsed = (state.workMinutes * 60) - state.timeLeft;
+            let newFloor = Math.floor(timeElapsed / 600) + 1;
+            if(newFloor > state.currentFloor) {
+                state.currentFloor = newFloor;
+                showFloorUp();
+                spawnMob(); // Instantly spawn harder mob
+            }
+            
+            let { atk, total } = calculateTotalStats();
+            let hasSwift = state.equipment.skill && state.equipment.skill.item.skillCode === 'SWIFT';
+            let attackRate = hasSwift ? 1 : 2; 
+
+            if (state.combatTickCounter % attackRate === 0) {
+                let finalDmg = atk; let isCrit = false;
+                let critChance = 0.05 + (total.luk * 0.01); 
+                
+                if (Math.random() < critChance) {
+                    isCrit = true; let critMult = 1.5;
+                    if (state.equipment.skill && state.equipment.skill.item.skillCode === 'CRIT') critMult = 2.0;
+                    finalDmg = Math.floor(finalDmg * critMult);
+                }
+
+                let cAvatar = document.getElementById('combat-avatar'); let mAvatar = document.getElementById('mob-avatar');
+                cAvatar.classList.remove('attacking'); void cAvatar.offsetWidth; cAvatar.classList.add('attacking');
+                
+                state.currentMob.currentHp -= finalDmg;
+                createDamageText(finalDmg, isCrit);
+
+                mAvatar.classList.add('hit'); setTimeout(() => mAvatar.classList.remove('hit'), 200);
+                updateMobHP();
+
+                if (state.currentMob.currentHp <= 0) {
+                    state.kills++; state.sessionKills++;
+                    document.getElementById('header-kills').innerText = `TOTAL KILLS: ${state.kills}`;
+                    spawnMob();
+                }
+            }
+        }
+
+        function skipCombat() { 
+            clearInterval(state.timerId); 
+            state.timeLeft = 0; 
+            state.sessionKills = 0; // Penalty
+            document.getElementById('study-timer').innerText = "00:00";
+            endCombat(); 
+        } 
+
+        function endCombat() {
+            clearInterval(state.timerId); document.title = "Chill Pomodoro";
+            
+            document.getElementById('combat-stage').classList.remove('active');
+            document.getElementById('study-timer').classList.add('hidden');
+            document.getElementById('skip-btn').classList.add('hidden');
+            document.getElementById('dungeon-info').classList.add('hidden');
+            
+            document.getElementById('report-modal').classList.add('active');
+            
+            let txt = `Dungeon Escaped!\n\n`;
+            txt += `Monsters Defeated: <span style="color:var(--highlight)">${state.sessionKills}</span>\n\n`;
+            
+            if (state.sessionKills === 0) {
+                txt += "You fled without defeating any monsters. No loot.";
+                document.getElementById('btn-claim-loot').classList.add('hidden');
+                document.getElementById('btn-return-empty').classList.remove('hidden');
+            } else {
+                txt += "You found a treasure chest!";
+                document.getElementById('btn-claim-loot').classList.remove('hidden');
+                document.getElementById('btn-return-empty').classList.add('hidden');
+            }
+            document.getElementById('report-log').innerHTML = txt;
+        }
+
+        // --- GACHA (WEIGHTED LOOT) ---
+        function openGacha() {
+            document.getElementById('report-modal').classList.remove('active');
+            document.getElementById('gacha-modal').classList.add('active');
+            document.getElementById('chest-icon').style.display = 'block';
+            document.getElementById('chest-hint').style.display = 'block';
+            document.getElementById('gacha-reveal').classList.add('hidden');
+        }
+
+        function revealLoot() {
+            document.getElementById('chest-icon').style.display = 'none';
+            document.getElementById('chest-hint').style.display = 'none';
+            document.getElementById('gacha-reveal').classList.remove('hidden');
+            
+            let { total } = calculateTotalStats();
+            
+            // Weighted Probability Logic
+            let totalWeight = 0;
+            let weightedPool = itemDatabase.map(item => {
+                let weight = 10;
+                if(item.rarity === 'Common') weight = 55;
+                if(item.rarity === 'Uncommon') weight = 30;
+                if(item.rarity === 'Rare') weight = 12;
+                if(item.rarity === 'Epic') {
+                    weight = 3 + (total.luk * 0.5); // LUK significantly helps Epic drops
+                }
+                totalWeight += weight;
+                return { item, weight };
+            });
+
+            let randomVal = Math.random() * totalWeight;
+            let selectedItem = weightedPool[0].item;
+            for(let i = 0; i < weightedPool.length; i++) {
+                randomVal -= weightedPool[i].weight;
+                if(randomVal <= 0) {
+                    selectedItem = weightedPool[i].item;
+                    break;
+                }
+            }
+
+            grantItem(selectedItem);
+            
+            setIcon(document.getElementById('gacha-icon'), selectedItem.icon, selectedItem.name);
+            document.getElementById('gacha-name').innerText = selectedItem.name;
+            document.getElementById('gacha-name').style.color = selectedItem.color;
+            document.getElementById('gacha-stats').innerHTML = formatTooltip(selectedItem);
+        }
+
+        function returnToCamp() {
+            document.getElementById('report-modal').classList.remove('active');
+            document.getElementById('gacha-modal').classList.remove('active');
+            
+            document.getElementById('hud-panel').classList.remove('hidden');
+            document.getElementById('camp-actions').classList.remove('hidden');
+            
+            document.getElementById('center-campfire').classList.add('burning');
+            document.getElementById('center-campfire').classList.remove('extinguished');
+
+            document.getElementById('header-status').innerText = "STATUS: RESTING AT CAMP";
+            document.getElementById('world').className = "bg-camp"; document.body.className = "bg-camp";
+            renderInventory();
+        }
+    </script>
+</body>
+</html>
