@@ -94,8 +94,7 @@
             transform-origin: bottom center;
         }
 
-        /* Ép khung chứa luôn ở chế độ Flexbox để căn giữa mọi loại ảnh */
-        /* Phóng to icon theo tỷ lệ từ dưới đáy lên để giữ đều chân nhân vật */
+        
         .pixel-icon {
             --scale: 1;
             width: 16px; height: 16px;
@@ -109,14 +108,14 @@
             transform-origin: bottom center;
         }
 
-        /* Ép khung chứa luôn ở chế độ Flexbox để căn giữa mọi loại ảnh */
+        
         .avatar-display, #combat-avatar, #mob-avatar {
             display: flex; align-items: flex-end; justify-content: center;
         }
         .avatar-display { width: 62px; height: 62px; filter: drop-shadow(0 4px 4px rgba(0,0,0,0.8)); margin-right: 15px; }
         #combat-avatar, #mob-avatar { width: 70px; height: 70px; }
 
-        /* Khống chế file ảnh .png bên ngoài không bị móp méo */
+       
         .character-icon {
             width: 64px; height: 64px; object-fit: contain; object-position: center bottom;
             image-rendering: pixelated; image-rendering: crisp-edges; pointer-events: none;
@@ -124,20 +123,18 @@
         }
         
         #combat-avatar .pixel-icon, #mob-avatar .pixel-icon { --scale: 4; }
-        /* === CẬP NHẬT: Giúp 3 nhân vật đồng đều === */
+       
         .class-button .character-icon { 
-            /* Bỏ kích thước cứng */
-            /* width: 58px; height: 58px; */
+           
 
-            /* Ép chiều cao cố định để tạo đường cơ sở bằng nhau */
             height: 64px; 
-            width: auto; /* Chiều rộng tự động theo tỷ lệ */
+            width: auto; 
             
-            /* Đảm bảo căn giữa */
+          
             display: block;
-            margin: 0 auto 10px auto; /* căn giữa, tạo khoảng cách dưới 10px */
+            margin: 0 auto 10px auto;
 
-            /* Giữ nguyên thuộc tính pixelated */
+            
             image-rendering: pixelated; 
             image-rendering: crisp-edges;
             filter: drop-shadow(0 3px 0 rgba(0,0,0,0.85));
@@ -147,11 +144,11 @@
         .mini-weapon .pixel-icon, .mini-skill .pixel-icon { --scale: 1.8; }
         .class-button { 
             min-width: 120px; 
-            height: 140px; /* Cố định chiều cao nút */
+            height: 140px; 
             display: flex; 
             flex-direction: column; 
             align-items: center; 
-            justify-content: space-between; /* Đẩy ảnh lên trên, chữ xuống dưới */
+            justify-content: space-between; 
             background: rgba(255,255,255,0.05);
             border: 1px solid var(--panel-border);
             padding: 10px;
@@ -159,8 +156,8 @@
             cursor: pointer;
         }
         .class-button .character-icon { 
-            height: 70px;  /* Tăng chiều cao icon nhân vật */
-            width: auto;   /* Chiều rộng tự động theo tỷ lệ */
+            height: 70px; 
+            width: auto;   
             max-width: 100%;
             object-fit: contain; 
             object-position: bottom center; 
@@ -381,7 +378,7 @@
         }
         generateStars();
 
-        const PIXEL_SHEET = 'https://opengameart.org/sites/default/files/all_the_icons_.png';
+        const PIXEL_SHEET = 'assets/all_the_icons_.png';
         document.documentElement.style.setProperty('--pixel-sheet', `url("${PIXEL_SHEET}")`);
 
         const ICONS = {
@@ -447,11 +444,11 @@
             const resolved = resolveIcon(icon);
             if (!resolved) return '';
 
-    // Nếu vật phẩm/quái vật dùng đường dẫn ảnh ngoài (.png)
+   
             if (typeof resolved === 'object' && resolved.src) {
                 return `<img class="character-icon" src="${escapeAttr(resolved.src)}" alt="${escapeAttr(resolved.alt || fallbackAlt)}" draggable="false">`;
     }
-    // Nếu vật phẩm/quái vật dùng tọa độ (x, y) từ ảnh gốc
+    
             if (typeof resolved === 'object' && Number.isFinite(resolved.x) && Number.isFinite(resolved.y)) {
                 return `<span class="${escapeAttr(className)}" style="--x:${resolved.x}; --y:${resolved.y};" role="img" aria-label="${escapeAttr(resolved.alt || fallbackAlt)}"></span>`;
     }
